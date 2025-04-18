@@ -14,11 +14,10 @@ from qdrant_client.http.models import (
     MatchValue,
 )
 
-QDRANT_ENDPOINT = os.getenv("QDRANT_ENDPOINT_URL")
-
 class DocumentIndexer:
-    def __init__(self, qdrant_endpoint: str):
-        self.qdrant_endpoint = qdrant_endpoint
+    def __init__(self):
+        # If not hosted, use local Qdrant with Docker
+        self.qdrant_endpoint = os.getenv("QDRANT_ENDPOINT_URL") or "http://localhost:6333"
         self.client = AsyncQdrantClient(self.qdrant_endpoint)
         self.vectors = None
         self.embedding_function = OpenAIEmbeddings(model="text-embedding-3-large")
