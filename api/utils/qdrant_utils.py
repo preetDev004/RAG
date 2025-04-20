@@ -20,7 +20,7 @@ class DocumentIndexer:
         self.qdrant_endpoint = os.getenv("QDRANT_ENDPOINT_URL") or "http://localhost:6333"
         self.client = AsyncQdrantClient(self.qdrant_endpoint)
         self.vectors = None
-        self.embedding_function = OpenAIEmbeddings(model="text-embedding-3-large")
+        self.embedding_function = OpenAIEmbeddings()
         self.collection_name = "rag_bot"
 
     async def index_into_qdrant(self, extracted_text, file_name, doc_type, chunk_size):
