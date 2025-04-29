@@ -1,8 +1,8 @@
 import os
-import datetime as dt
+from datetime import * 
 import logging
 
-today_date = dt.now().strftime("%Y-%m-%d")
+today_date = datetime.now().strftime("%Y-%m-%d")
 log_base_dir = 'logs'
 log_subdir = os.path.join(log_base_dir, today_date)
 os.makedirs(log_subdir, exist_ok=True)

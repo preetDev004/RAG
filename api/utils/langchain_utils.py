@@ -1,12 +1,12 @@
 import time
 import langsmith as ls
 from services.logger import logger
-from qdrant_utils import DocumentIndexer
+from utils.qdrant_utils import DocumentIndexer
 from utils.prompts import get_query_refiner_prompt, get_main_prompt
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
-from langchain.callbacks import get_openai_callback
+from langchain_community.callbacks.manager import get_openai_callback
 
 
 async def format_doc(docs):
@@ -16,7 +16,9 @@ async def format_doc(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
 
-async def index_document(extracted_text, filename, file_extension):
+async def index_documents(
+    session_id: str, extracted_text: str, filename: str, file_extension: str
+):
     """
     Index the document into Qdrant.
     """
@@ -40,7 +42,9 @@ async def index_document(extracted_text, filename, file_extension):
         raise e
 
 
-async def retrieve_similar_documents(refined_query, num_of_chunks):
+async def retrieve_similar_documents(
+    refined_query: str, num_of_chunks: str, session_id: str
+):
     """
     Retrieve similar documents from Qdrant based on the refined query.
     """
@@ -132,7 +136,9 @@ def create_history(messages):
 
 
 @ls.traceable(run_type="chain", name="Chat Pipeline")
-async def generate_chatbot_response(query, past_messages, no_of_chunks: int = 3):
+async def generate_chatbot_response(
+    query, past_messages, session_id, no_of_chunks: int = 3
+):
     """
     Generate a chatbot response based on the user query and past messages.
     """
@@ -141,7 +147,7 @@ async def generate_chatbot_response(query, past_messages, no_of_chunks: int = 3)
     logger.info("Refined user query: " + refined_query)
 
     extracted_text, retrieved_docs = await retrieve_similar_documents(
-        refined_query, no_of_chunks
+        refined_query, no_of_chunks, session_id
     )
     logger.info("Extracted text: " + extracted_text)
     logger.info("Retrieved documents: " + str(retrieved_docs))
