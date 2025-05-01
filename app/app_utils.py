@@ -6,7 +6,7 @@ def upload_document(file):
     print("Uploading File...")
     try:
         files = {"file": (file.name, file, file.type)}
-        response = requests.post("http://localhost:8080/upload_doc", files={files})
+        response = requests.post("http://localhost:8000/upload_doc", params={"session_id": "123"}, files=files)
         if response.status_code == 200:
             return response.json()
         else:
@@ -21,10 +21,10 @@ def upload_document(file):
 
 def get_api_response(question, session_id, model):
     headers = {"accept": "application/json", "Content-Type": "application/json"}
-    data = {question: question, session_id: session_id, model: model}
+    data = {"question": question, "session_id": session_id, "model": model}
     try:
         response = requests.post(
-            "http://localhost:8080/chat", headers=headers, json=data
+            "http://localhost:8000/chat", headers=headers, json=data
         )
         if response.status_code == 200:
             return response.json()
@@ -38,7 +38,7 @@ def get_api_response(question, session_id, model):
 
 def list_documents():
     try:
-        response = requests.get("http://localhost:8080/list_docs")
+        response = requests.get("http://localhost:8000/list_docs")
         if response.status_code == 200:
             return response.json()
         else:
@@ -56,7 +56,7 @@ def delete_document(file_id):
     data = {"file_id": file_id}
     try:
         response = requests.post(
-            "http://localhost:8080/delete_doc", headers=headers, json=data
+            "http://localhost:8000/delete_doc", headers=headers, json=data
         )
         if response.status_code == 200:
             return response.json()

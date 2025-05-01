@@ -18,11 +18,10 @@ def display_sidebar():
                 upload_response = upload_document(uploaded_file)
                 if upload_response:
                     st.sidebar.success(
-                        f"File {uploaded_file.name} uploaded successfuly with id {uploaded_file['file_id']}."
+                        f"File {uploaded_file.name} uploaded successfully."
                     )
-                    st.session_state.documents = (
-                        list_documents()
-                    )  # refresh the docs after upload
+                    # Refresh documents list after successful upload
+                    st.session_state.documents = list_documents()
 
     # Sidebar List Document
     st.sidebar.header("Current Documents")
@@ -38,22 +37,23 @@ def display_sidebar():
     if documents:
         for doc in documents:
             st.sidebar.text(
-                f"{doc['filename']} (ID: {doc['id']}, Uploaded: {doc['uploaded_timestamp']})"
+                f"{doc.get('filename', 'Unnamed')} (ID: {doc.get('id', 'N/A')}, Uploaded: {doc.get('uploaded_timestamp', 'Unknown')})"
             )
 
         # Delete Docs
-        selected_file_id = st.sidebar.selectbox(
-            "Select a Doc to delete",
-            options=[doc["id"] for doc in documents],
-            format_func=lambda x: next(
-                doc["filename"] for doc in documents if doc["id"] == x
-            ),
-        )
-        if st.sidebar.button("Deleting Selected Document"):
-            delete_response = delete_document(selected_file_id)
-            if delete_response:
-                st.sidebar.success(f"Document with ID {selected_file_id} deleted successfully.")
-                st.session_state.documents = list_documents()
-            else:
-                st.error(f"Failed to delete the document with ID {selected_file_id}.")
-            
+        if len(documents) > 0:
+            selected_file_id = st.sidebar.selectbox(
+                "Select a Doc to delete",
+                options=[doc.get("id") for doc in documents if "id" in doc],
+                format_func=lambda x: next(
+                    (doc.get("filename", "Unnamed") for doc in documents if doc.get("id") == x),
+                    "Unknown"
+                ),
+            )
+            if st.sidebar.button("Delete Selected Document"):
+                delete_response = delete_document(selected_file_id)
+                if delete_response:
+                    st.sidebar.success(f"Document with ID {selected_file_id} deleted successfully.")
+                    st.session_state.documents = list_documents()
+                else:
+                    st.sidebar.error(f"Failed to delete the document with ID {selected_file_id}.")
