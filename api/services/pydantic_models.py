@@ -1,15 +1,25 @@
-from pydantic import BaseModel
-from typing import Optional, Literal
+from pydantic import BaseModel, Field
+from enum import Enum
+from datetime import datetime
 
-class ChatRequest(BaseModel):
-    question: str
-    session_id: Optional[str] = None
-    model: Literal["o4-mini", "gpt-4o-mini"]
-    no_of_chunks: Optional[int] = 3
+class ModelName(str, Enum):
+    GPT4_O = "gpt-4o"
+    GPT4_O_MINI = "gpt-4o-mini"
 
-class ChatResponse(BaseModel):
+class QueryInput(BaseModel):
     question: str
-    refine_question: str
-    response: str
+    session_id: str = Field(default=None)
+    model: ModelName = Field(default=ModelName.GPT4_O_MINI)
+
+class QueryResponse(BaseModel):
+    answer: str
     session_id: str
-    debug_info: Optional[dict] = None
+    model: ModelName
+
+class DocumentInfo(BaseModel):
+    id: str
+    filename: str
+    upload_timestamp: datetime
+
+class DeleteFileRequest(BaseModel):
+    file_id: str
