@@ -2,3 +2,5 @@ venv/
 .env
 __pycache__/
 logs/
+rag_app.db
+.DS_Store

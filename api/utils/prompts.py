@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from services.logger import logger
 
+
 def get_main_prompt():
     prompt = """
     "You are an assistant that helps users to find the best possible answer to their questions."
@@ -18,6 +19,7 @@ def get_main_prompt():
     )
     logger.debug(f"Main Prompt: {final_prompt}")
     return final_prompt
+
 
 def get_query_refiner_prompt():
     contextualize_q_system_prompt = """

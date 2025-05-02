@@ -1,7 +1,8 @@
 import time
+import os
 import langsmith as ls
 from services.logger import logger
-from utils.qdrant_utils import DocumentIndexer
+from utils.qdrant import DocumentIndexer
 from utils.prompts import get_query_refiner_prompt, get_main_prompt
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.output_parsers import StrOutputParser
@@ -29,7 +30,7 @@ async def index_documents(
     try:
         await indexer.index_into_qdrant(
             extracted_text=extracted_text,
-            file_name=filename,
+            file_id=filename,  # Changed from file_name to file_id to match parameter name
             doc_type=file_extension,
             chunk_size=1500,
         )
@@ -89,28 +90,32 @@ async def invoke_chain(query, context, history, llm):
     input_data = {
         "user_query": query,
         "context": context,
-        "messages": history,
+        "messages": history.messages,  # Pass the messages list, not the history object itself
     }
     logger.info(f"Input data: {input_data}")
 
-    with get_openai_callback() as _:
+    with get_openai_callback() as cb:
         final_response = await final_chain.ainvoke(input_data)  # Asynchronous method
-
-    return final_response
+        return final_response, cb
 
 
 def initialize_llm(model="gpt-4o-mini", temperature=0.0, llm_provider="openai"):
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    logger.info(f"Using OpenAI API key: {openai_api_key[:5]}...{openai_api_key[-5:]}")
+
     if llm_provider == "openai":
         logger.info(f"Initializing OpenAI model with values {model} and {temperature}")
         llm = ChatOpenAI(
-            temperature=temperature, model_name=model, streaming=True, stream_usage=True
+            temperature=temperature, model_name=model, streaming=True, stream_usage=True,
+            api_key=openai_api_key  # Explicitly pass API key here
         )
         return llm
     return None
 
 
 async def refine_user_query(query, messages):
-    llm = ChatOpenAI(temperature=0.0, model_name="gpt-4o-mini")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    llm = ChatOpenAI(temperature=0.0, model_name="gpt-4o-mini", api_key=openai_api_key)
     history = create_history(messages)
     prompt = get_query_refiner_prompt()
     refined_query_chain = prompt | llm | StrOutputParser()

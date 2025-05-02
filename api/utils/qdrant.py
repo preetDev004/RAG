@@ -32,7 +32,7 @@ class DocumentIndexer:
         self.embedding_function = OpenAIEmbeddings()
         self.collection_name = "rag_bot"
 
-    async def index_into_qdrant(self, extracted_text, file_name, doc_type, chunk_size):
+    async def index_into_qdrant(self, extracted_text, file_id, doc_type, chunk_size):
         """
         Index document content into the Qdrant vector database.
         """
@@ -40,7 +40,7 @@ class DocumentIndexer:
             # Create a document object
             doc = Document(
                 page_content=extracted_text,
-                metadata={"file_name": file_name, "doc_type": doc_type},
+                metadata={"file_id": file_id, "doc_type": doc_type},
             )
 
             # Determine optimal chunk size based on text length
@@ -66,7 +66,7 @@ class DocumentIndexer:
                 logger.error(f"Error adding chunks to Qdrant: {e}")
                 raise e
 
-            logger.info(f"Successfully indexed document {file_name} in QdrantDB")
+            logger.info(f"Successfully indexed document {file_id} in QdrantDB")
             return True
 
         except Exception as e:
@@ -91,10 +91,10 @@ class DocumentIndexer:
         )
         chunks = text_splitter.split_documents([doc])
         
-        # Ensure all chunks have file_name in metadata
+        # Ensure all chunks have file_id in metadata
         for chunk in chunks:
-            if "file_name" not in chunk.metadata:
-                chunk.metadata["file_name"] = doc.metadata.get("file_name", "unknown")
+            if "file_id" not in chunk.metadata:
+                chunk.metadata["file_id"] = str(uuid4())
                 
         return chunks
         
@@ -146,33 +146,42 @@ class DocumentIndexer:
         )
         return True
 
-    async def delete_chunks_by_file_name(self, file_name):
+    async def delete_chunks_by_file_id(self, file_id):
         """
-        Delete all chunks associated with a specific file_name
+        Delete all chunks associated with a specific file_id
         """
         try:
-            # Create a filter to find documents with the matching file_name
+            # Create a filter to find documents with the matching file_id
             file_filter = Filter(
                 must=[
                     FieldCondition(
-                        key="metadata.file_name", match=MatchValue(value=file_name)
+                        key="metadata.file_id", match=MatchValue(value=file_id)
                     )
                 ]
             )
 
+            # Count the points first to determine if there are any to delete
+            count_result = await self.client.count(
+                collection_name=self.collection_name, 
+                count_filter=file_filter
+            )
+            count = count_result.count
+            
+            if count <= 0:
+                logger.warning(f"No chunks found for file_id {file_id} in Qdrant")
+                return 0
+                
             # Delete the matching documents
-            result = await self.client.delete(
-                collection_name=self.collection_name, points_selector=file_filter
+            await self.client.delete(
+                collection_name=self.collection_name, 
+                points_selector=file_filter
             )
-
-            deleted_count = result.deleted
-            logger.info(
-                f"Successfully deleted {deleted_count} chunks for file {file_name}"
-            )
-            return deleted_count
+            
+            logger.info(f"Successfully deleted {count} chunks for file {file_id}")
+            return count
 
         except Exception as e:
-            logger.error(f"Error deleting chunks for file {file_name}: {e}")
+            logger.error(f"Error deleting chunks for file {file_id}: {e}")
             raise e
 
     async def get_retriever(self, top_k=3):
@@ -193,22 +202,30 @@ class DocumentIndexer:
                     logger.error(f"Error getting collection info: {e}")
                     raise e
                 
-                # error if it doesn't exist
+                # Check if collection exists
                 if not collection_info:
                     raise ValueError(f"Collection {self.collection_name} does not exist")
                 
-                # Create a new QdrantVectorStore instance with only the required parameters
-                # to avoid validation issues with async client
+                # Import here to avoid potential circular imports
                 from langchain_qdrant import QdrantVectorStore
-                from langchain.vectorstores.utils import DistanceStrategy
+                
+                # Create a standalone sync client for langchain_qdrant
+                from qdrant_client import QdrantClient
+                
+                # Create a synchronous client for QdrantVectorStore
+                # The AsyncQdrantClient causes issues with the retriever
+                sync_client = QdrantClient(
+                    url=self.qdrant_endpoint,
+                    api_key=self.api_key,
+                    timeout=10.0
+                )
                 
                 self.vectors = QdrantVectorStore(
-                    client=self.client,
+                    client=sync_client,  # Use synchronous client
                     collection_name=self.collection_name,
                     embedding=self.embedding_function,
                     content_payload_key="page_content",
-                    metadata_payload_key="metadata",
-                    distance_strategy=DistanceStrategy.COSINE
+                    metadata_payload_key="metadata"
                 )
                 
                 logger.info(f"Initialized vector store from collection {self.collection_name}")
