@@ -1,0 +1,16 @@
+python-dotenv
+streamlit
+fastapi
+uvicorn
+langsmith
+langchain
+langchain-openai
+langchain-core
+langchain-qdrant
+langchain_community
+qdrant_client
+python-multipart
+aiosqlite
+asyncio
+PyPDF2
+python-docx
