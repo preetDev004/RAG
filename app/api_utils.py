@@ -43,7 +43,15 @@ def upload_document(file):
 
 def list_documents():
     try:
-        response = requests.get(f"{api_url}/list-docs")
+        # Get session_id from session state, or use None if not found
+        session_id = st.session_state.get('session_id')
+        
+        if not session_id:
+            st.warning("No session ID found. Please upload a document first to create a session.")
+            return []
+            
+        # Include the session_id as a query parameter
+        response = requests.get(f"{api_url}/list-docs", params={"session_id": session_id})
         if response.status_code == 200:
             return response.json()
         else:
@@ -54,19 +62,24 @@ def list_documents():
         return []
 
 def delete_document(file_id):
-    headers = {
-        'accept': 'application/json',
-        'Content-Type': 'application/json'
-    }
-    data = {"file_id": file_id}
-
     try:
-        response = requests.post(f"{api_url}/delete-doc", headers=headers, json=data)
+        # Get session_id from session state
+        session_id = st.session_state.get('session_id')
+        
+        if not session_id:
+            st.error("No session ID found. Unable to delete document.")
+            return False
+            
+        # Create delete request payload with file_id and session_id
+        payload = {"file_id": file_id, "session_id": session_id}
+        
+        response = requests.post(f"{api_url}/delete-doc", json=payload)
         if response.status_code == 200:
-            return response.json()
+            st.success("Document deleted successfully.")
+            return True
         else:
             st.error(f"Failed to delete document. Error: {response.status_code} - {response.text}")
-            return None
+            return False
     except Exception as e:
         st.error(f"An error occurred while deleting the document: {str(e)}")
-        return None
+        return False

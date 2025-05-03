@@ -14,17 +14,21 @@ def display_sidebar():
             with st.spinner("Uploading..."):
                 upload_response = upload_document(uploaded_file)
                 if upload_response:
+                    st.session_state.session_id = upload_response.get('session_id')
                     st.sidebar.success(f"File '{uploaded_file.name}' uploaded successfully with ID {upload_response['file_id']}.")
                     st.session_state.documents = list_documents()  # Refresh the list after upload
 
     # Sidebar: List Documents
     st.sidebar.header("Uploaded Documents")
-    if st.sidebar.button("Refresh Document List"):
+    if not st.session_state.session_id or st.session_state.documents == []:
+        st.sidebar.text("No documents uploaded yet.")
+
+    if st.session_state.session_id and st.sidebar.button("Refresh Document List"):
         with st.spinner("Refreshing..."):
             st.session_state.documents = list_documents()
 
     # Initialize document list if not present
-    if "documents" not in st.session_state:
+    if st.session_state.session_id and "documents" not in st.session_state.documents:
         st.session_state.documents = list_documents()
 
     documents = st.session_state.documents

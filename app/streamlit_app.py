@@ -8,6 +8,9 @@ st.title("Langchain RAG Chatbot")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "documents" not in st.session_state:
+    st.session_state.documents = []
+
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 
