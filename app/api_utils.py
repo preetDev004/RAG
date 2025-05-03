@@ -1,5 +1,8 @@
+import os
 import requests
 import streamlit as st
+
+api_url = os.getenv("API_URL")
 
 def get_api_response(question, session_id, model):
     headers = {
@@ -14,7 +17,7 @@ def get_api_response(question, session_id, model):
         data["session_id"] = session_id
 
     try:
-        response = requests.post("http://localhost:8080/chat", headers=headers, json=data)
+        response = requests.post(f"{api_url}/chat", headers=headers, json=data)
         if response.status_code == 200:
             return response.json()
         else:
@@ -28,7 +31,7 @@ def upload_document(file):
     print("Uploading file...")
     try:
         files = {"file": (file.name, file, file.type)}
-        response = requests.post("http://localhost:8080/upload-doc", files=files)
+        response = requests.post(f"{api_url}/upload-doc", files=files)
         if response.status_code == 200:
             return response.json()
         else:
@@ -40,7 +43,7 @@ def upload_document(file):
 
 def list_documents():
     try:
-        response = requests.get("http://localhost:8080/list-docs")
+        response = requests.get(f"{api_url}/list-docs")
         if response.status_code == 200:
             return response.json()
         else:
@@ -58,7 +61,7 @@ def delete_document(file_id):
     data = {"file_id": file_id}
 
     try:
-        response = requests.post("http://localhost:8080/delete-doc", headers=headers, json=data)
+        response = requests.post(f"{api_url}/delete-doc", headers=headers, json=data)
         if response.status_code == 200:
             return response.json()
         else:
