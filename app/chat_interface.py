@@ -1,8 +1,10 @@
 import streamlit as st
-from api_utils import get_api_response
+from api_utils import get_api_response, get_app_info
+
 
 def display_chat_interface():
-    # Chat interface
+    display_app_info()
+
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -13,21 +15,49 @@ def display_chat_interface():
             st.markdown(prompt)
 
         with st.spinner("Generating response..."):
-            response = get_api_response(prompt, st.session_state.session_id, st.session_state.model)
-            
+            response = get_api_response(
+                prompt, st.session_state.session_id, st.session_state.model
+            )
+
             if response:
-                st.session_state.session_id = response.get('session_id')
-                st.session_state.messages.append({"role": "assistant", "content": response['answer']})
-                
+                st.session_state.session_id = response.get("session_id")
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": response["answer"]}
+                )
+
                 with st.chat_message("assistant"):
-                    st.markdown(response['answer'])
-                    
+                    st.markdown(response["answer"])
+
                     with st.expander("Details"):
                         st.subheader("Generated Answer")
-                        st.code(response['answer'])
+                        st.code(response["answer"])
                         st.subheader("Model Used")
-                        st.code(response['model'])
+                        st.code(response["model"])
                         st.subheader("Session ID")
-                        st.code(response['session_id'])
+                        st.code(response["session_id"])
             else:
                 st.error("Failed to get a response from the API. Please try again.")
+
+
+def display_app_info():
+    app_info = get_app_info()
+    if app_info and not st.session_state.messages:
+        # Simple container with API info
+        with st.container():
+            st.write(app_info["description"])
+
+            # Simple info layout
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Version", app_info["version"])
+            with col2:
+                st.metric("Status", app_info["status"])
+            with col3:
+                st.metric("Author", app_info["author"])
+
+            # Clean GitHub button using Streamlit components
+            github_url = app_info["gitHub"]
+
+            col1, col2, col3 = st.columns([2, 1, 2])
+            with col2:
+                st.link_button("View on GitHub", github_url, use_container_width=True)

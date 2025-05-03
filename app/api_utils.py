@@ -2,7 +2,8 @@ import os
 import requests
 import streamlit as st
 
-api_url = os.getenv("API_URL")
+# Use a default local API URL if environment variable is not set
+api_url = os.getenv("API_URL", "http://localhost:7860")
 
 def get_api_response(question, session_id, model):
     headers = {
@@ -83,3 +84,33 @@ def delete_document(file_id):
     except Exception as e:
         st.error(f"An error occurred while deleting the document: {str(e)}")
         return False
+
+def get_app_info():
+    """
+    Get the application information from the API root endpoint.
+    """
+    try:
+        response = requests.get(f"{api_url}/", timeout=5)  # Add timeout to prevent hanging
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"Failed to fetch application information. Error: {response.status_code} - {response.text}")
+            return {
+                "project": "RAG",
+                "description": "Retrieval Augmented Generation - Qdrant & Langchain",
+                "version": "0.1.0",
+                "status": "API unreachable",
+                "author": "Preet Patel",
+                "gitHub": "https://github.com/preetDev004/RAG"
+            }
+    except Exception as e:
+        st.error(f"An error occurred while fetching application information: {str(e)}")
+        # Return default information when the API is not accessible
+        return {
+            "project": "RAG",
+            "description": "Retrieval Augmented Generation - Qdrant & Langchain",
+            "version": "0.1.0",
+            "status": "API unreachable",
+            "author": "Preet Patel",
+            "gitHub": "https://github.com/preetDev004/RAG"
+        }
