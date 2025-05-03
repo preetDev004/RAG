@@ -23,3 +23,4 @@ class DocumentInfo(BaseModel):
 
 class DeleteFileRequest(BaseModel):
     file_id: str
+    session_id: str
