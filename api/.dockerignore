@@ -1,0 +1,5 @@
+.gitattributes
+.gitognore
+
+README.md
+__pycache__/

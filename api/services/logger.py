@@ -3,6 +3,10 @@ from datetime import *
 import logging
 
 today_date = datetime.now().strftime("%Y-%m-%d")
+# production (Huggingface Spaces)
+# log_base_dir = '/home/user/logs'
+
+# local
 log_base_dir = 'logs'
 log_subdir = os.path.join(log_base_dir, today_date)
 os.makedirs(log_subdir, exist_ok=True)

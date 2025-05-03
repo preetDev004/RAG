@@ -1,5 +1,9 @@
+import os
+import uvicorn
+from dotenv import load_dotenv
 from services.logger import logger
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from services.pydantic_models import (
     QueryInput,
     QueryResponse,
@@ -22,6 +26,7 @@ import uuid
 import shutil
 from contextlib import asynccontextmanager
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup code: initialize database
@@ -31,6 +36,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://preet-rag.streamlit.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+async def root():
+    return {
+        "project": "RAG",
+        "description": "Retrieval Augmented Generation - Qdrant & Langchain",
+        "version": "0.1.0",
+        "status": "running",
+        "author": "Preet Patel",
+        "gitHub": "https://github.com/preetDev004/RAG",
+    }
 
 
 @app.post("/chat", response_model=QueryResponse)
@@ -95,12 +120,15 @@ async def chat(query_input: QueryInput):
 
 
 @app.post("/upload-doc")
-async def upload_and_index_document(file: UploadFile = File(...)):
+async def upload_and_index_document(
+    file: UploadFile = File(...), session_id: str = None
+):
     """
     Upload and index a document in both the database and Qdrant vector store.
 
     Args:
         file: The file to upload
+        session_id: The session ID to associate with this document
 
     Returns:
         dict: Result message and file ID
@@ -108,6 +136,11 @@ async def upload_and_index_document(file: UploadFile = File(...)):
     Raises:
         HTTPException: If file type is unsupported or indexing fails
     """
+    # Require a session ID - generate one if not provided
+    if not session_id:
+        session_id = str(uuid.uuid4())
+        logger.info(f"Generated new session ID for document upload: {session_id}")
+
     allowed_extensions = [".pdf", ".docx", ".txt"]
     file_extension = os.path.splitext(file.filename)[1].lower()
 
@@ -116,17 +149,22 @@ async def upload_and_index_document(file: UploadFile = File(...)):
             status_code=400,
             detail=f"Unsupported file type. Allowed types are: {', '.join(allowed_extensions)}",
         )
-
+    # local development
     temp_file_path = f"temp_{file.filename}"
+
+    # production
+    # temp_file_path = f"/home/user/{file.filename}"
 
     try:
         # Save the uploaded file to a temporary file
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Insert document record into database first
-        file_id = await insert_document_record(file.filename)
-        logger.info(f"Document record created with ID {file_id}")
+        # Insert document record into database first - now with session_id
+        file_id = await insert_document_record(file.filename, session_id)
+        logger.info(
+            f"Document record created with ID {file_id} for session {session_id}"
+        )
 
         # Read file content
         with open(temp_file_path, "rb") as file_content:
@@ -138,7 +176,7 @@ async def upload_and_index_document(file: UploadFile = File(...)):
 
         if not extracted_text:
             logger.error(f"Failed to extract text from {file.filename}")
-            await delete_document_record(file_id)
+            await delete_document_record(file_id, session_id)
             raise HTTPException(
                 status_code=500, detail=f"Failed to extract text from {file.filename}"
             )
@@ -150,7 +188,7 @@ async def upload_and_index_document(file: UploadFile = File(...)):
             # Index the extracted text into Qdrant
             success = await indexer.index_into_qdrant(
                 extracted_text=extracted_text,
-                file_id=file_id, 
+                file_id=file_id,
                 doc_type=doc_type,
                 chunk_size=None,  # Use dynamic chunk sizing
             )
@@ -158,7 +196,7 @@ async def upload_and_index_document(file: UploadFile = File(...)):
             if not success:
                 logger.error(f"Failed to index document {file.filename} into Qdrant")
                 # Clean up the document record if indexing fails
-                await delete_document_record(file_id)
+                await delete_document_record(file_id, session_id)
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to index {file.filename} into vector database",
@@ -167,12 +205,13 @@ async def upload_and_index_document(file: UploadFile = File(...)):
             return {
                 "message": f"File {file.filename} has been successfully uploaded and indexed in Qdrant.",
                 "file_id": file_id,
+                "session_id": session_id,
             }
 
         except Exception as e:
             # Clean up the document record if indexing fails
             logger.error(f"Error during document indexing: {str(e)}")
-            await delete_document_record(file_id)
+            await delete_document_record(file_id, session_id)
             raise HTTPException(
                 status_code=500, detail=f"Failed to index {file.filename}: {str(e)}"
             )
@@ -191,18 +230,21 @@ async def upload_and_index_document(file: UploadFile = File(...)):
 
 
 @app.get("/list-docs", response_model=list[DocumentInfo])
-async def list_documents():
+async def list_documents(session_id: str):
     """
-    Get a list of all documents in the document store.
+    Get a list of documents for a specific session.
+
+    Args:
+        session_id: The session ID to retrieve documents for
 
     Returns:
-        list[DocumentInfo]: List of document information objects
+        list[DocumentInfo]: List of document information objects belonging to the session
     """
     try:
-        documents = await get_all_documents()
+        documents = await get_all_documents(session_id)
         return documents
     except Exception as e:
-        logger.error(f"Error retrieving documents: {str(e)}")
+        logger.error(f"Error retrieving documents for session {session_id}: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve documents: {str(e)}"
         )
@@ -214,53 +256,60 @@ async def delete_document(request: DeleteFileRequest):
     Delete a document from both the Qdrant vector store and database.
 
     Args:
-        request: DeleteFileRequest containing the file_id to delete
+        request: DeleteFileRequest containing the file_id and session_id to delete
 
     Returns:
         dict: Result message indicating success or failure
     """
     try:
+        file_id = request.file_id
+        session_id = request.session_id
+
+        # Verify session_id is provided
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Session ID is required")
+
         # Initialize the DocumentIndexer
         indexer = DocumentIndexer()
 
         # Delete from Qdrant vector store first
         try:
             # Use delete_chunks_by_file_id instead of delete_doc_from_chroma
-            deleted_count = await indexer.delete_chunks_by_file_id(request.file_id)
+            deleted_count = await indexer.delete_chunks_by_file_id(file_id)
 
             if deleted_count <= 0:
                 logger.warning(
-                    f"No chunks found to delete for file_id {request.file_id} in Qdrant"
+                    f"No chunks found to delete for file_id {file_id} in Qdrant"
                 )
             else:
                 logger.info(
-                    f"Deleted {deleted_count} chunks for file_id {request.file_id} from Qdrant"
+                    f"Deleted {deleted_count} chunks for file_id {file_id} from Qdrant"
                 )
 
         except Exception as e:
             logger.error(
-                f"Failed to delete document with file_id {request.file_id} from Qdrant: {str(e)}"
+                f"Failed to delete document with file_id {file_id} from Qdrant: {str(e)}"
             )
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to delete document with file_id {request.file_id} from vector store: {str(e)}",
+                detail=f"Failed to delete document with file_id {file_id} from vector store: {str(e)}",
             )
 
         # If successfully deleted from vector store (or if no chunks were found),
-        # proceed with deleting from database
-        db_delete_success = await delete_document_record(request.file_id)
+        # proceed with deleting from database with session verification
+        db_delete_success = await delete_document_record(file_id, session_id)
 
         if not db_delete_success:
             logger.error(
-                f"Document deleted from Qdrant but failed to delete from database for file_id {request.file_id}"
+                f"Failed to delete document with file_id {file_id} for session {session_id}. Document may not exist or might belong to another session."
             )
             raise HTTPException(
-                status_code=500,
-                detail=f"Document deleted from vector store but failed to delete from database",
+                status_code=403,
+                detail=f"Not authorized to delete this document or document not found",
             )
 
         return {
-            "message": f"Successfully deleted document with file_id {request.file_id} from Qdrant and database"
+            "message": f"Successfully deleted document with file_id {file_id} from Qdrant and database"
         }
     except HTTPException:
         raise
@@ -269,3 +318,15 @@ async def delete_document(request: DeleteFileRequest):
         raise HTTPException(
             status_code=500, detail=f"Failed to delete document: {str(e)}"
         )
+
+
+def main():
+    """Run the FastAPI application."""
+    load_dotenv()
+    uvicorn.run(
+        "app:app", host="0.0.0.0", port=int(os.getenv("PORT", 7860)), reload=True
+    )
+
+
+if __name__ == "__main__":
+    main()
